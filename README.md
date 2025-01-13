@@ -1,26 +1,31 @@
-# Soil Moisture Prediction System
+# Soil Moisture Prediction
 
 This system fetches, processes, and predicts soil moisture using real-time data.
 
 ## Description and background
 
-The validator queries the miners during specific execution windows defined in the get_validator_windows method. These windows are:
-
-2:00 - 2:30
-10:00 - 10:30
-14:00 - 14:30
-20:00 - 20:30
-The validator checks if it is within an execution window and then queries the miners with the payload.
+The validators queries the miners during specific execution windows defined in the get_request_windows method. These windows are:
+- 2:00 - 2:30
+- 10:00 - 10:30
+- 14:00 - 14:30
+- 20:00 - 20:30
+The miners give prediction for the next window.
 
 ## Aim of the task
 
-- Real-time soil data fetching and processing
-- Historical data analysis
-- Predictive modeling with:
-  - Base model (Prophet-based fallback)
-  - Support for custom model integration
-- Generate predictions
-- Ground truth validation
+Maximize the final score
+```python
+final_score = await scoring_mechanism.score(pred_data)
+```
+
+# Steps
+
+- Understand the flow, datasets, and what the base model does
+- Look at these repos:
+    - https://github.com/fkwai/geolearn
+    - https://github.com/mhpi/hydroDL
+    - https://github.com/leelew/CLSTM
+    - https://github.com/ljz1228/CLM-LSTM-soil-moisture-prediction (This one seems to be the best but the authors have taken it down. I am requesting from the authors via email.)
 
 ## Installation
 
@@ -47,22 +52,6 @@ Run the main prediction service:
 ```bash
 python soil.py
 ```
-
-The system will:
-- Fetch latest data
-- Process historical values
-- Make predictions for the next time frame
-- Validate against ground truth when available
-
-## Custom Model Integration
-
-We encourage contributors to develop custom models that improve upon the base model's performance. To integrate your custom model:
-
-1. Follow the implementation guide in [CUSTOMMODELS.md](CUSTOMMODELS.md)
-2. Ensure your model follows the required naming conventions and interfaces
-3. Test against the base model performance
-
-See [CUSTOMMODELS.md](CUSTOMMODELS.md) for detailed specifications and examples.
 
 ## Components
 
