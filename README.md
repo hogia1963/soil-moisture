@@ -11,6 +11,8 @@ The validators queries the miners during specific execution windows defined in t
 - 20:00 - 20:30
 The miners give prediction for the next window.
 
+Compare models: https://nickel5.substack.com/p/global-soil-moisture-models
+
 ## Aim of the task
 
 Maximize the final score
