@@ -135,7 +135,7 @@ class SoilScoringMechanism():
                 crs=predictions["crs"],
                 model_predictions=predictions["predictions"],
                 target_date=predictions["target_time"],
-                miner_id=predictions["miner_id"]
+                contributor_id=predictions["contributor_id"]
             )
 
             if isinstance(metrics, dict) and metrics.get("status") == "retry_scheduled":
@@ -159,8 +159,8 @@ class SoilScoringMechanism():
             logger.info(f"Total score: {total_score:.4f}")
 
             return {
-                "miner_id": predictions.get("miner_id"),
-                "miner_hotkey": predictions.get("miner_hotkey"),
+                "contributor_id": predictions.get("contributor_id"),
+                "contributor_hotkey": predictions.get("contributor_hotkey"),
                 "metrics": metrics["validation_metrics"],
                 "total_score": total_score,
                 "timestamp": predictions["target_time"],
@@ -177,7 +177,7 @@ class SoilScoringMechanism():
         crs: float,
         model_predictions: torch.Tensor,
         target_date: datetime,
-        miner_id: str,
+        contributor_id: str,
     ) -> dict:
         """
         Compute RMSE and SSIM between model predictions and SMAP data for valid pixels only.
@@ -187,7 +187,7 @@ class SoilScoringMechanism():
             crs: EPSG code as float
             model_predictions: tensor of shape [1, 2, 11, 11] for surface and rootzone
             target_date: datetime for SMAP data
-            miner_id: miner's unique identifier
+            contributor_id: contributor's unique identifier
         """
         device = model_predictions.device
         left, bottom, right, top = bounds
@@ -202,7 +202,7 @@ class SoilScoringMechanism():
             temp_file = tempfile.NamedTemporaryFile(suffix=".h5", delete=False)
 
             if not download_smap_data(smap_url, temp_file.name):
-                retry_result = await self.handle_smap_retry(miner_id)
+                retry_result = await self.handle_smap_retry(contributor_id)
                 logger.info(f"SMAP download failed, retry status: {retry_result}")
                 return retry_result
 
@@ -226,15 +226,15 @@ class SoilScoringMechanism():
                 await self.db_manager.execute(
                     """
                     DELETE FROM soil_moisture_predictions 
-                    WHERE miner_uid = :miner_id 
+                    WHERE contributor_uid = :contributor_id 
                     AND target_time = :target_time
                     """,
                     {
-                        "miner_id": miner_id,
+                        "contributor_id": contributor_id,
                         "target_time": target_date
                     }
                 )
-                logger.info(f"Deleted invalid prediction for miner {miner_id} at {target_date}")
+                logger.info(f"Deleted invalid prediction for contributor {contributor_id} at {target_date}")
                 
                 return {
                     "status": "invalid_prediction",
@@ -358,7 +358,7 @@ class SoilScoringMechanism():
                 except Exception as e:
                     logger.error(f"Error cleaning up temp file: {e}")
 
-    async def handle_smap_retry(self, miner_id: str) -> Dict:
+    async def handle_smap_retry(self, contributor_id: str) -> Dict:
         """Handle SMAP data retry logic."""
         try:
             current_time = datetime.datetime.now(datetime.timezone.utc)

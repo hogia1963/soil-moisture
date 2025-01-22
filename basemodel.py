@@ -5,6 +5,8 @@ import pytorch_lightning as pl
 from huggingface_hub import PyTorchModelHubMixin
 from torchmetrics import R2Score
 from pytorch_msssim import ssim
+from typing import Dict, List, Optional, Tuple, Any
+import numpy as np
 
 
 class SoilModel(pl.LightningModule, PyTorchModelHubMixin):
@@ -350,3 +352,46 @@ class SoilModel(pl.LightningModule, PyTorchModelHubMixin):
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+    
+    def run_inference(
+        self,
+        model_inputs: Dict[str, torch.Tensor]
+    ) -> Dict[str, np.ndarray]:
+        """Run model inference to predict SMAP soil moisture.
+
+        Args:
+            model_inputs: Dictionary containing preprocessed tensors
+                - sentinel_ndvi: [C, H, W] Sentinel bands + NDVI
+                - elevation: [1, H, W] Elevation data
+                - era5: [C, H, W] Weather data
+
+        Returns:
+            Dictionary containing:
+                - surface: [H, W] Surface soil moisture predictions
+                - rootzone: [H, W] Root zone soil moisture predictions
+        """
+        model: torch.nn.Module = self
+        try:
+            device = next(model.parameters()).device
+            sentinel = model_inputs["sentinel_ndvi"][:2].unsqueeze(0).to(device)
+            era5 = model_inputs["era5"].unsqueeze(0).to(device)
+            elevation = model_inputs["elevation"]
+            ndvi = model_inputs["sentinel_ndvi"][2:3]
+            elev_ndvi = torch.cat([elevation, ndvi], dim=0).unsqueeze(0).to(device)
+
+            with torch.no_grad():
+                outputs = model(sentinel, era5, elev_ndvi)
+                mask = (
+                    model_inputs.get("mask", torch.ones_like(outputs[0, 0]))
+                    .cpu()
+                    .numpy()
+                )
+
+                predictions = {
+                    "surface": outputs[0, 0].cpu().numpy() * mask,
+                    "rootzone": outputs[0, 1].cpu().numpy() * mask,
+                }
+                return predictions
+
+        except Exception as e:
+            raise RuntimeError(f"Error during model inference: {str(e)}")

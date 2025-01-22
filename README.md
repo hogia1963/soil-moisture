@@ -4,30 +4,85 @@ This system fetches, processes, and predicts soil moisture using real-time data.
 
 ## Description and background
 
-The validators queries the miners during specific execution windows defined in the get_request_windows method. These windows are:
+The validators query the contributors during specific execution windows defined in the get_request_windows method. These windows are:
 - 2:00 - 2:30
 - 10:00 - 10:30
 - 14:00 - 14:30
 - 20:00 - 20:30
-The miners give prediction for the next window.
-
-Compare models: https://nickel5.substack.com/p/global-soil-moisture-models
+The contributors give prediction for the next window.
 
 ## Aim of the task
 
-Maximize the final score
+Maximize the final score, given any day
 ```python
 final_score = await scoring_mechanism.score(pred_data)
 ```
 
-# Steps
+#### How to start?
 
 - Understand the flow, datasets, and what the base model does
+- The data pulling/evaluation code may have bugs. Can you spot any?
+- Data exception handling? For example, when receiving 404 from APIs.
 - Look at these repos:
     - https://github.com/fkwai/geolearn
     - https://github.com/mhpi/hydroDL
     - https://github.com/leelew/CLSTM
-    - https://github.com/ljz1228/CLM-LSTM-soil-moisture-prediction (This one seems to be the best but the authors have taken it down. I am requesting from the authors via email.)
+    - https://github.com/ljz1228/CLM-LSTM-soil-moisture-prediction (repo removed, uploaded to folder `CLM-LSTM-soil-moisture-prediction`)
+- Read this article on different models: https://nickel5.substack.com/p/global-soil-moisture-models
+
+#### **Input Format**
+
+The input to `run_inference` is a dictionary containing:
+
+- `sentinel_ndvi`: A numpy array of shape [3, H, W] representing Sentinel-2 bands B8, B4, and NDVI.
+- `elevation`: A numpy array of shape [1, H, W] representing elevation data.
+- `era5`: A numpy array of shape [17, H, W] containing weather variables.
+
+#### **Output Format**
+
+The output must be a dictionary with:
+
+- `surface`: A nested list (11x11) of floats between 0-1 representing surface soil moisture predictions.
+- `rootzone`: A nested list (11x11) of floats between 0-1 representing root zone soil moisture predictions.
+
+#### **Weather Data Details**
+
+IFS weather variables (in order):
+- t2m: Surface air temperature (2m height) (Kelvin)
+- tp: Total precipitation (m/day)
+- ssrd: Surface solar radiation downwards (Joules/m²)
+- st: Soil temperature at surface (Kelvin)
+- stl2: Soil temperature at 2m depth (Kelvin)
+- stl3: Soil temperature at 3m depth (Kelvin)
+- sp: Surface pressure (Pascals)
+- d2m: Dewpoint temperature (Kelvin)
+- u10: Wind components at 10m (m/s)
+- v10: Wind components at 10m (m/s)
+- ro: Total runoff (m/day)
+- msl: Mean sea level pressure (Pascals)
+- et0: Reference evapotranspiration (mm/day)
+- bare_soil_evap: Bare soil evaporation (mm/day)
+- svp: Saturated vapor pressure (kPa)
+- avp: Actual vapor pressure (kPa)
+- r_n: Net radiation (MJ/m²/day) 
+
+**Note**:
+Evapotranspiration are variables computed using the Penman-Monteith equation (FAO-56 compliant). 
+see soil_apis.py for more information on the data processing, transformations, and scaling.
+
+## NASA EarthData
+1. Create an account at https://urs.earthdata.nasa.gov/
+2. Accept the necessary EULAs for the following collections:
+    - GESDISC Test Data Archive 
+    - OB.DAAC Data Access 
+    - Sentinel EULA
+
+3. Generate an API token and save it in the .env file
+```
+EARTHDATA_USERNAME=<YOUR_EARTHDATA_USERNAME> 
+EARTHDATA_PASSWORD=<YOUR_EARTHDATA_PASSWORD>
+EARTHDATA_API_KEY=<YOUR_EARTHDATA_API_KEY> # earthdata api key for downloading data from NASA
+```
 
 ## Installation
 
@@ -57,9 +112,9 @@ python soil.py
 
 ## Components
 
-- `soilmoisture.py`: Main script handling data fetching and processing
-- `soilmoisture_basemodel.py`: Base model implementation and model loading logic
-- `CUSTOMMODELS.md`: Guide for implementing custom prediction models
+- `soilmoisture.py`: Main script handling data fetching, processing, and comparison with base model
+- `basemodel.py`: Base model implementation and model loading logic
+- `custommodel.py`: Your custom model
 
 ## Requirements
 

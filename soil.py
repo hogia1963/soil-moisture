@@ -5,9 +5,11 @@ import importlib.util
 import os
 from pydantic import Field
 from fiber.logging_utils import get_logger
+import importlib.util
 from uuid import uuid4
 from sqlalchemy import text
-from soil_moisture_basemodel import SoilModel
+from basemodel import SoilModel
+from custommodel import CustomSoilModel
 import traceback
 import base64
 import json
@@ -34,7 +36,7 @@ scoring_mechanism = SoilScoringMechanism()
 
 async def main():
     # Load data
-    current_time = datetime.now(timezone.utc) - timedelta(days=10) ##!! BACK TESTING
+    current_time = datetime.now(timezone.utc) - timedelta(days=10) ##!! BACK TESTING 10 days ago
     target_smap_time = get_smap_time(current_time)
     ifs_forecast_time = get_ifs_time_for_smap(target_smap_time)
 
@@ -80,8 +82,17 @@ async def main():
 
     # Base model inference
     model = _load_model(device)
-    predictions = run_model_inference(processed_data, model)
+    predictions = model.run_inference(processed_data)
+    base_score = await calculate_score(data, predictions, current_time, target_smap_time, 'base')
+    logger.info(f"Base score: {base_score}")
 
+    # Custom model inference
+    custom_model = CustomSoilModel()
+    custom_predictions = custom_model.run_inference(processed_data)
+    custom_score = await calculate_score(data, custom_predictions, current_time, target_smap_time, 'custom')
+    logger.info(f"Custom score: {custom_score}")
+
+async def calculate_score(data, predictions, current_time, target_smap_time, image_name):
     # Plot predictions
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     surface_plot = ax1.imshow(predictions["surface"], cmap='viridis')
@@ -93,12 +104,12 @@ async def main():
     plt.colorbar(rootzone_plot, ax=ax2, label='Moisture Content')
 
     plt.tight_layout()
-    plt.savefig('soil_moisture_predictions.png')
+    plt.savefig(f'{image_name}.png')
     plt.close()
 
     prediction_time = get_next_preparation_time(current_time)
 
-    miner_return = {
+    prediction_all_regions = {
         "surface_sm": predictions["surface"].tolist(),
         "rootzone_sm": predictions["rootzone"].tolist(),
         "uncertainty_surface": None,
@@ -107,68 +118,19 @@ async def main():
         "sentinel_crs": data["sentinel_crs"],
         "target_time": prediction_time.isoformat(),
     }
-    sentinel_crs = int(str(miner_return["sentinel_crs"]).split(":")[-1])
-    pred_data = {
-        "bounds": miner_return["sentinel_bounds"],
+    sentinel_crs = int(str(prediction_all_regions["sentinel_crs"]).split(":")[-1])
+    answer = {
+        "bounds": prediction_all_regions["sentinel_bounds"],
         "crs": sentinel_crs,
-        "predictions": miner_return,
+        "predictions": prediction_all_regions,
         "target_time": target_smap_time,
         "region": {
             "id": 0
         },
-        "miner_id": "",
-        "miner_hotkey": ""
+        "contributor_id": ""
     }
 
-    final_score = await scoring_mechanism.score(pred_data)
-
-    print(final_score)
-
-    # smap_data = get_smap_data_for_sentinel_bounds(
-    #             temp_file.name,
-    #             (
-    #                 sentinel_bounds.left,
-    #                 sentinel_bounds.bottom,
-    #                 sentinel_bounds.right,
-    #                 sentinel_bounds.top,
-    #             ),
-    #             sentinel_crs.to_string(),
-    #         )
-    # smap_data = predictions
-
-    # surface_sm = torch.from_numpy(smap_data["surface"]).float()
-    # rootzone_sm = torch.from_numpy(smap_data["rootzone"]).float()
-
-    # if surface_sm.dim() == 2:
-    #     surface_sm = surface_sm.unsqueeze(0).unsqueeze(0)
-    # if rootzone_sm.dim() == 2:
-    #     rootzone_sm = rootzone_sm.unsqueeze(0).unsqueeze(0)
-    # surface_sm_11x11 = F.interpolate(surface_sm, size=(11, 11), mode="bilinear", align_corners=False)
-    # rootzone_sm_11x11 = F.interpolate(rootzone_sm, size=(11, 11), mode="bilinear", align_corners=False)
-    # surface_mask_11x11 = ~torch.isnan(surface_sm_11x11[0, 0])
-    # rootzone_mask_11x11 = ~torch.isnan(rootzone_sm_11x11[0, 0])
-
-    # valid_surface_pred = torch.from_numpy(predictions["surface"]).float()[surface_mask_11x11]
-    # valid_surface_truth = surface_sm_11x11[0, 0][surface_mask_11x11]
-    # surface_rmse = torch.sqrt(F.mse_loss(valid_surface_pred, valid_surface_truth)).item()
-
-    # valid_rootzone_pred = torch.from_numpy(predictions["rootzone"]).float()[rootzone_mask_11x11]
-    # valid_rootzone_truth = rootzone_sm_11x11[0, 0][rootzone_mask_11x11]
-    # rootzone_rmse = torch.sqrt(F.mse_loss(valid_rootzone_pred, valid_rootzone_truth)).item()
-
-    # surface_ssim = 0
-    # rootzone_ssim = 0
-    # surface_score = 0.6 * sigmoid_rmse(torch.tensor(surface_rmse)) + 0.4 * (
-    #     (surface_ssim + 1) / 2
-    # )
-    # rootzone_score = 0.6 * sigmoid_rmse(torch.tensor(rootzone_rmse)) + 0.4 * (
-    #     (rootzone_ssim + 1) / 2
-    # )
-
-    # final_score = 0.5 * surface_score + 0.5 * rootzone_score
-
-    # print(final_score)
-
+    return await scoring_mechanism.score(answer)
 
 def _load_h3_map():
         """Load H3 map data, first checking locally then from HuggingFace."""
@@ -354,62 +316,7 @@ async def process_data(data: Dict[str, Any]) -> Dict[str, torch.Tensor]:
     except Exception as e:
         logger.error(f"Error processing TIFF data: {str(e)}")
         logger.error(f"Error trace: {traceback.format_exc()}")
-        raise RuntimeError(f"Error processing miner data: {str(e)}")
-
-def run_model_inference(processed_data, model):
-    """Run model inference on processed data."""
-    if not model:
-        raise RuntimeError(
-            "Model not initialized"
-        )
-
-    return predict_smap(processed_data, model)
-
-def predict_smap(
-        model_inputs: Dict[str, torch.Tensor], model: torch.nn.Module
-    ) -> Dict[str, np.ndarray]:
-        """Run model inference to predict SMAP soil moisture.
-
-        Args:
-            model_inputs: Dictionary containing preprocessed tensors
-                - sentinel_ndvi: [C, H, W] Sentinel bands + NDVI
-                - elevation: [1, H, W] Elevation data
-                - era5: [C, H, W] Weather data
-
-        Returns:
-            Dictionary containing:
-                - surface: [H, W] Surface soil moisture predictions
-                - rootzone: [H, W] Root zone soil moisture predictions
-        """
-        try:
-            device = next(model.parameters()).device
-            sentinel = model_inputs["sentinel_ndvi"][:2].unsqueeze(0).to(device)
-            era5 = model_inputs["era5"].unsqueeze(0).to(device)
-            elevation = model_inputs["elevation"]
-            ndvi = model_inputs["sentinel_ndvi"][2:3]
-            elev_ndvi = torch.cat([elevation, ndvi], dim=0).unsqueeze(0).to(device)
-
-            with torch.no_grad():
-                outputs = model(sentinel, era5, elev_ndvi)
-                mask = (
-                    model_inputs.get("mask", torch.ones_like(outputs[0, 0]))
-                    .cpu()
-                    .numpy()
-                )
-
-                predictions = {
-                    "surface": outputs[0, 0].cpu().numpy() * mask,
-                    "rootzone": outputs[0, 1].cpu().numpy() * mask,
-                }
-                logger.info(f"Soil Predictions {predictions}")
-                return predictions
-
-        except Exception as e:
-            logger.error(f"Error during model inference: {str(e)}")
-            logger.error(
-                f"Input shapes - sentinel: {sentinel.shape}, era5: {era5.shape}, elev_ndvi: {elev_ndvi.shape}"
-            )
-            raise RuntimeError(f"Error during model inference: {str(e)}")
+        raise RuntimeError(f"Error processing contributor data: {str(e)}")
         
 def sigmoid_rmse(rmse: float) -> float:
     """Convert RMSE to score using sigmoid function. (higher is better)"""

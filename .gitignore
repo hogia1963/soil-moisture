@@ -57,3 +57,4 @@ logs/
 .venv/
 data
 tasks
+*.png
