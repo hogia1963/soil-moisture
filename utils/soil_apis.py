@@ -72,7 +72,7 @@ async def fetch_hls_b4_b8(bbox, datetime_obj, download_dir=None):
                 seconds=1
             )
 
-        headers = {"Authorization": f'Bearer {os.getenv("EARTHDATA_API_KEY")}'}
+        # headers = {"Authorization": f'Bearer {os.getenv("EARTHDATA_API_KEY")}'}
         params = {
             "collection_concept_id": "C2021957295-LPCLOUD",
             "temporal": f"{month_start.strftime('%Y-%m-%d')}T00:00:00Z/{month_end.strftime('%Y-%m-%d')}T23:59:59Z",
@@ -84,7 +84,7 @@ async def fetch_hls_b4_b8(bbox, datetime_obj, download_dir=None):
         print(f"Searching for Sentinel data for {month_start.strftime('%B %Y')}")
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                base_url, params=params, headers=headers
+                base_url, params=params#, headers=headers
             ) as response:
                 if response.status == 200:
                     response_json = await response.json()
@@ -357,22 +357,25 @@ async def fetch_ifs_forecast(
 ):
     """Fetch IFS forecast data asynchronously, requesting new data if no cache exists."""
     try:
-        current_utc = datetime.now(timezone.utc)
-        use_previous_day = current_utc.hour < 7 or (
-            current_utc.hour == 7 and current_utc.minute < 0
-        )
+        # current_utc = datetime.now(timezone.utc)
+        current_utc = datetime_obj
+        # use_previous_day = current_utc.hour < 7 or (
+        #     current_utc.hour == 7 and current_utc.minute < 0
+        # )
         # AAA
-        use_previous_day = True
+        # use_previous_day = True
+        use_previous_day = False
+
         target_date = (
             current_utc - timedelta(days=1) if use_previous_day else current_utc
         )
         data_dir = get_data_dir()
         today_cache = os.path.join(
-            data_dir, f"ecmwf_forecast_{target_date.strftime('%Y%m%d')}.nc"
+            data_dir, f"ecmwf_forecast_{target_date.strftime('%Y-%m-%d_%H%M')}.nc"
         )
         yesterday_cache = os.path.join(
             data_dir,
-            f"ecmwf_forecast_{(target_date - timedelta(days=1)).strftime('%Y%m%d')}.nc",
+            f"ecmwf_forecast_{(target_date - timedelta(days=1)).strftime('%Y-%m-%d_%H%M')}.nc",
         )
 
         # Try loading target day's cached data first
@@ -382,6 +385,7 @@ async def fetch_ifs_forecast(
             data = await extract_ifs_variables(
                 ds,
                 bbox,
+                current_utc.hour,
                 sentinel_bounds=sentinel_bounds,
                 sentinel_crs=sentinel_crs,
                 sentinel_shape=sentinel_shape,
@@ -396,6 +400,7 @@ async def fetch_ifs_forecast(
             data = await extract_ifs_variables(
                 ds,
                 bbox,
+                current_utc.hour,
                 sentinel_bounds=sentinel_bounds,
                 sentinel_crs=sentinel_crs,
                 sentinel_shape=sentinel_shape,
@@ -436,6 +441,7 @@ async def fetch_ifs_forecast(
                 return await extract_ifs_variables(
                     ds,
                     bbox,
+                    current_utc.hour,
                     sentinel_bounds=sentinel_bounds,
                     sentinel_crs=sentinel_crs,
                     sentinel_shape=sentinel_shape,
@@ -516,7 +522,7 @@ async def process_global_ifs(grib_paths, timesteps, output_path):
 
 
 async def extract_ifs_variables(
-    ds, bbox, sentinel_bounds=None, sentinel_crs=None, sentinel_shape=None
+    ds, bbox,hour, sentinel_bounds=None, sentinel_crs=None, sentinel_shape=None
 ):
     """Extract and process IFS variables from dataset asynchronously."""
     try:
@@ -546,8 +552,8 @@ async def extract_ifs_variables(
         if ds_cropped.sizes["latitude"] == 0 or ds_cropped.sizes["longitude"] == 0:
             print(f"No data found in bbox: {bbox}")
             return None
-
-        ds_time = ds_cropped.isel(time=0)
+        print("giowf hieenj taij la", hour)
+        ds_time = ds_cropped.isel(time=int((hour//6)),missing_dims="ignore")
         print(f"Raw IFS data shape: {ds_time['t2m'].shape}")
         et0, svp, avp, r_n = calculate_penman_monteith(ds_time)
 
@@ -732,8 +738,10 @@ async def combine_tiffs(
         print(f"Sentinel data shapes: {[band.shape for band in sentinel_data]}")
         print(f"IFS data shapes: {[band.shape for band in ifs_data]}")
         output_dir = get_data_dir()
+        os.makedirs(os.path.join(
+            output_dir,"combine_tiffs"), exist_ok=True)
         output_file = os.path.join(
-            output_dir,
+            output_dir,"combine_tiffs",
             f"combined_{bbox[0]}_{bbox[1]}_{bbox[2]}_{bbox[3]}_{date_str}.tif",
         )
 

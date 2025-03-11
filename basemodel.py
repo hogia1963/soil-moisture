@@ -380,12 +380,17 @@ class SoilModel(pl.LightningModule, PyTorchModelHubMixin):
             elev_ndvi = torch.cat([elevation, ndvi], dim=0).unsqueeze(0).to(device)
 
             with torch.no_grad():
+                print("shape of sentinel:", sentinel.shape)
+                print("shape of era5:", era5.shape)
+                print("shape of elev_ndvi:", elev_ndvi.shape)
                 outputs = model(sentinel, era5, elev_ndvi)
+                print("shape of outputs:", outputs.shape)
                 mask = (
                     model_inputs.get("mask", torch.ones_like(outputs[0, 0]))
                     .cpu()
                     .numpy()
                 )
+                print("shape of mask:", mask.shape)
 
                 predictions = {
                     "surface": outputs[0, 0].cpu().numpy() * mask,

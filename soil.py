@@ -36,7 +36,7 @@ scoring_mechanism = SoilScoringMechanism()
 
 async def main():
     # Load data
-    current_time = datetime.now(timezone.utc) - timedelta(days=10) ##!! BACK TESTING 10 days ago
+    current_time = datetime.now(timezone.utc) - timedelta(days=13) ##!! BACK TESTING 10 days ago
     target_smap_time = get_smap_time(current_time)
     ifs_forecast_time = get_ifs_time_for_smap(target_smap_time)
 
@@ -79,10 +79,11 @@ async def main():
             "target_time": target_time,
         }
     processed_data = await process_data(data)
-
+    logger.info(f"Processed data shape: {processed_data['sentinel_ndvi'].shape}")
     # Base model inference
     model = _load_model(device)
     predictions = model.run_inference(processed_data)
+    logger.info(f"predictions surface data shape: {predictions['surface'].shape}")
     base_score = await calculate_score(data, predictions, current_time, target_smap_time, 'base')
     logger.info(f"Base score: {base_score}")
 
@@ -303,7 +304,7 @@ async def process_data(data: Dict[str, Any]) -> Dict[str, torch.Tensor]:
                 for key in model_inputs:
                     if isinstance(model_inputs[key], torch.Tensor):
                         model_inputs[key] = model_inputs[key].to(device)
-
+                        logger.info(f"Processed model inputs shape: { model_inputs[key].shape}")
                 return model_inputs
 
         finally:

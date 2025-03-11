@@ -58,3 +58,12 @@ logs/
 data
 tasks
 *.png
+*.tif
+*.tiff
+predictions
+predictions/*
+predictions_v2/*
+predictions_v3/*
+predictions_v4/*
+checkpoints/*
+data_cleaning_reports/*

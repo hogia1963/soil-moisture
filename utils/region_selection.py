@@ -21,7 +21,7 @@ def select_random_base_cell(base_cells, resolution=2, min_lat=-56, max_lat=60):
         and min_lat <= h3.cell_to_latlng(cell["index"])[0] <= max_lat
     ]
     return random.choice(eligible_cells) if eligible_cells else None
-
+    # return eligible_cells[2] if eligible_cells else None
 
 def subdivide_if_urban_present(
     base_hex, urban_cells_set, lakes_cells_set, target_resolution=5, max_resolution=8

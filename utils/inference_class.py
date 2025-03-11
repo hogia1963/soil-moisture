@@ -49,7 +49,7 @@ class SoilMoistureInferencePreprocessor:
                 ndvi = self._pad_tensor(ndvi)
 
                 sentinel_ndvi = torch.cat([sentinel_ndvi, ndvi], dim=0)
-
+                print("sentinel_ndvi shape is" , sentinel_ndvi.shape)
                 return {
                     "sentinel_ndvi": sentinel_ndvi,
                     "elevation": elevation,
@@ -90,7 +90,6 @@ class SoilMoistureInferencePreprocessor:
                 ndvi = src.read([21])  # NDVI
 
                 sentinel_ndvi = np.vstack([sentinel_data, ndvi])  # [3, H, W]
-
                 return {
                     "sentinel_ndvi": sentinel_ndvi,  # [3, H, W]
                     "elevation": elevation,          # [1, H, W]
