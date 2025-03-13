@@ -275,7 +275,7 @@ async def main():
     collector = DataCollector()
     
     # Collect and process 5 days of training data
-    processed_data = await collector.collect_training_data(num_days=2, days_ago=210)
+    processed_data = await collector.collect_training_data(num_days=2, days_ago=4)
     
     # Load processed data
     start_date = datetime.now(timezone.utc) - timedelta(days=30)

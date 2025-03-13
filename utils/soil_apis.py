@@ -359,12 +359,19 @@ async def fetch_ifs_forecast(
     try:
         # current_utc = datetime.now(timezone.utc)
         current_utc = datetime_obj
-        # use_previous_day = current_utc.hour < 7 or (
-        #     current_utc.hour == 7 and current_utc.minute < 0
-        # )
-        # AAA
-        # use_previous_day = True
-        use_previous_day = False
+        
+        # Check if requested date is today
+        today = datetime.now(timezone.utc).date()
+        requested_date = datetime_obj.date()
+        
+        # Only use previous day's data if we're requesting today's data
+        # For historical dates, use the exact date requested
+        use_previous_day = (requested_date == today)
+        
+        if use_previous_day:
+            print("Requesting today's data, using previous day's forecast for reliability")
+        else:
+            print(f"Requesting historical data for {requested_date}, using exact date")
 
         target_date = (
             current_utc - timedelta(days=1) if use_previous_day else current_utc
@@ -522,7 +529,7 @@ async def process_global_ifs(grib_paths, timesteps, output_path):
 
 
 async def extract_ifs_variables(
-    ds, bbox,hour, sentinel_bounds=None, sentinel_crs=None, sentinel_shape=None
+    ds, bbox, hour, sentinel_bounds=None, sentinel_crs=None, sentinel_shape=None
 ):
     """Extract and process IFS variables from dataset asynchronously."""
     try:
@@ -552,8 +559,19 @@ async def extract_ifs_variables(
         if ds_cropped.sizes["latitude"] == 0 or ds_cropped.sizes["longitude"] == 0:
             print(f"No data found in bbox: {bbox}")
             return None
-        print("giowf hieenj taij la", hour)
-        ds_time = ds_cropped.isel(time=int((hour//6)),missing_dims="ignore")
+            
+        # Calculate time index and handle out-of-range hours
+        time_index = int(hour // 6)
+        max_available_index = ds_cropped.sizes["time"] - 1
+        
+        if time_index > max_available_index:
+            print(f"Warning: Requested hour {hour} is beyond available forecast range.")
+            print(f"Using last available forecast at index {max_available_index} instead.")
+            time_index = max_available_index
+        
+        print(f"Using forecast time index {time_index} for hour {hour}")
+        ds_time = ds_cropped.isel(time=time_index, missing_dims="ignore")
+        
         print(f"Raw IFS data shape: {ds_time['t2m'].shape}")
         et0, svp, avp, r_n = calculate_penman_monteith(ds_time)
 
@@ -906,10 +924,31 @@ def get_target_shape(bbox, target_resolution=500):
 
 def get_data_dir():
     """Get the path to the project's data directory, creating it if it doesn't exist."""
-    # Get the current working directory (where the validator is running)
+    # Support both old and new directory structures
+    from pathlib import Path
+    import inspect
+    
+    # Original data directory (for backward compatibility)
     cwd = os.getcwd()
     data_dir = os.path.join(cwd, "data")
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-        logger.info(f"Created data directory at: {data_dir}")
+    
+    # New directory for serving system
+    serving_data_dir = os.path.join(cwd, "serving_data", "raw", "downloads")
+    
+    # Create both directories to maintain compatibility
+    for dir_path in [data_dir, serving_data_dir]:
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path, exist_ok=True)
+    
+    # Try to determine if being called from serving.py
+    caller_frame = inspect.currentframe().f_back
+    while caller_frame:
+        if (caller_frame.f_globals.get('__file__') and 
+            'serving.py' in caller_frame.f_globals.get('__file__')):
+            print(f"Using serving data directory: {serving_data_dir}")
+            return serving_data_dir
+        caller_frame = caller_frame.f_back
+    
+    # Default to original data directory for compatibility with other modules
     return data_dir
+
