@@ -11,6 +11,22 @@ The serving system provides an easy way to obtain soil moisture predictions from
 3. Runs predictions using one of four available model versions
 4. Saves results and visualizations for analysis
 
+## Prerequisites
+
+### Download Model Checkpoints
+
+Before running the serving system, you need to download the model checkpoint files:
+
+1. Download the checkpoint archive from [Google Drive](https://drive.google.com/file/d/1QdJQ31CHPca9-kWwn33GOlVDjTaO-OYy/view?usp=drive_link)
+2. Extract the archive to the `checkpoints` directory in the project root
+3. Ensure you have the following files in the checkpoints directory:
+   - `rcnn_best.pth` (V1 model)
+   - `rcnn_v2_best.pth` (V2 model)
+   - `rcnn_v3_best.pth` (V3 model)
+   - `rcnn_v4_best.pth` (V4 model)
+   - Various scaler files (*.joblib)
+   - Label statistics files (*.npz)
+
 ## Quick Start
 
 ```bash
